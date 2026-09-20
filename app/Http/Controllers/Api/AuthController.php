@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\LoginStatus;
 use App\Enums\RoleName;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Models\LoginActivity;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
@@ -58,6 +60,11 @@ class AuthController extends Controller
         );
 
         if (! $user || ! $passwordOk) {
+            // Only attempts against real accounts are recorded; unknown emails are not stored at all.
+            if ($user) {
+                LoginActivity::record($user, LoginStatus::Failed, $request);
+            }
+
             return response()->json([
                 'message' => 'The provided credentials are incorrect.',
                 'code' => 'invalid_credentials',
@@ -65,6 +72,8 @@ class AuthController extends Controller
         }
 
         if (! $user->isActive()) {
+            LoginActivity::record($user, LoginStatus::Blocked, $request);
+
             return response()->json([
                 'message' => 'Your account has been deactivated. Please contact support.',
                 'code' => 'account_inactive',
@@ -72,6 +81,8 @@ class AuthController extends Controller
         }
 
         if (! $user->hasVerifiedEmail()) {
+            LoginActivity::record($user, LoginStatus::Blocked, $request);
+
             return response()->json([
                 'message' => 'Please verify your email address before signing in.',
                 'code' => 'email_not_verified',
@@ -90,6 +101,8 @@ class AuthController extends Controller
 
         $token = $user->createToken($remember ? 'spa-remembered' : 'spa', ['*'], $expiresAt);
 
+        LoginActivity::record($user, LoginStatus::Success, $request, $token->accessToken->id);
+
         return response()->json([
             'message' => 'Login successful.',
             'token' => $token->plainTextToken,
@@ -102,7 +115,11 @@ class AuthController extends Controller
     /** Revoke only the token used for this request. */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+
+        // Record when this session ended (a transient token has no id, hence the null-safe read).
+        LoginActivity::recordLogout($token->id ?? null);
+        $token->delete();
 
         return response()->json(['message' => 'Logged out successfully.']);
     }

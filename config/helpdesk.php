@@ -15,4 +15,10 @@ return [
     'token_ttl' => (int) env('AUTH_TOKEN_TTL', 720),
     'remember_token_ttl' => (int) env('AUTH_REMEMBER_TOKEN_TTL', 43200),
 
+    /*
+    | How long sign-in history (IP addresses, devices) is kept, in days.
+    | Older rows are deleted daily by `helpdesk:prune-login-activities`.
+    */
+    'login_activity_retention_days' => (int) env('LOGIN_ACTIVITY_RETENTION_DAYS', 90),
+
 ];

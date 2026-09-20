@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EmailVerificationController;
+use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\UserController;
+use App\Models\LoginActivity;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +31,9 @@ Route::post('/reset-password', [PasswordResetController::class, 'reset'])
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+
+    // Sign-in history (IP addresses and devices): requires the `activity.view` permission.
+    Route::get('/login-activities', [LoginActivityController::class, 'index'])->can('viewAny', LoginActivity::class);
 
     // Administrative user management. `can:` runs UserPolicy (permission + Super Admin protection).
     Route::prefix('users')->group(function () {
