@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Models\Role;
 use Spatie\Permission\Traits\HasRoles;
 
 // status, last_login_* and roles are intentionally NOT fillable: backend code sets them explicitly.
@@ -41,5 +42,20 @@ class User extends Authenticatable implements MustVerifyEmail
     public function isSuperAdmin(): bool
     {
         return $this->hasRole(RoleName::SuperAdmin->value);
+    }
+
+    /**
+     * Roles this user may hand out. Only a Super Admin can grant privileged
+     * roles (admin / super-admin); everyone else is limited to agent and customer.
+     *
+     * @return list<string>
+     */
+    public function assignableRoles(): array
+    {
+        if ($this->isSuperAdmin()) {
+            return Role::query()->pluck('name')->all();
+        }
+
+        return [RoleName::Agent->value, RoleName::Customer->value];
     }
 }

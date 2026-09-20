@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\UserController;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
 // Public
@@ -27,4 +29,17 @@ Route::post('/reset-password', [PasswordResetController::class, 'reset'])
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+
+    // Administrative user management. `can:` runs UserPolicy (permission + Super Admin protection).
+    Route::prefix('users')->group(function () {
+        Route::get('/', [UserController::class, 'index'])->can('viewAny', User::class);
+        Route::post('/', [UserController::class, 'store'])->can('create', User::class);
+        // Must be declared before '/{user}' so it is not treated as a user id.
+        Route::get('/assignable-roles', [UserController::class, 'assignableRoles'])->can('viewAny', User::class);
+        Route::get('/{user}', [UserController::class, 'show'])->can('view', 'user');
+        Route::patch('/{user}', [UserController::class, 'update'])->can('update', 'user');
+        Route::post('/{user}/activate', [UserController::class, 'activate'])->can('activate', 'user');
+        Route::post('/{user}/deactivate', [UserController::class, 'deactivate'])->can('deactivate', 'user');
+        Route::put('/{user}/role', [UserController::class, 'updateRole'])->can('assignRole', 'user');
+    });
 });
