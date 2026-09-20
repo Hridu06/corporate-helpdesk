@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\UserController;
+use App\Models\Department;
 use App\Models\LoginActivity;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +36,18 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     // Sign-in history (IP addresses and devices): requires the `activity.view` permission.
     Route::get('/login-activities', [LoginActivityController::class, 'index'])->can('viewAny', LoginActivity::class);
+
+    // Departments. Managers see all; other viewers (agents) see only their own (see DepartmentPolicy).
+    Route::prefix('departments')->group(function () {
+        Route::get('/', [DepartmentController::class, 'index'])->can('viewAny', Department::class);
+        Route::post('/', [DepartmentController::class, 'store'])->can('create', Department::class);
+        // Must be declared before '/{department}' so it is not treated as an id.
+        Route::get('/assignable-staff', [DepartmentController::class, 'assignableStaff'])->can('manageMembers', Department::class);
+        Route::get('/{department}', [DepartmentController::class, 'show'])->can('view', 'department');
+        Route::patch('/{department}', [DepartmentController::class, 'update'])->can('update', 'department');
+        Route::delete('/{department}', [DepartmentController::class, 'destroy'])->can('delete', 'department');
+        Route::put('/{department}/members', [DepartmentController::class, 'updateMembers'])->can('manageMembers', 'department');
+    });
 
     // Administrative user management. `can:` runs UserPolicy (permission + Super Admin protection).
     Route::prefix('users')->group(function () {
