@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -33,6 +34,10 @@ class AppServiceProvider extends ServiceProvider
             return $this->app->isProduction() ? $rule->uncompromised() : $rule;
         });
 
+        // The emailed link opens the React app, which then calls POST /api/reset-password.
+        ResetPassword::createUrlUsing(fn (User $user, string $token) => config('helpdesk.frontend_url')
+            .'/reset-password?token='.$token.'&email='.urlencode($user->getEmailForPasswordReset()));
+
         $this->configureRateLimiting();
 
         // Super Admin implicitly holds every permission (including future ones).
@@ -46,6 +51,11 @@ class AppServiceProvider extends ServiceProvider
     {
         // Per email+IP stops targeted guessing; the per-IP cap stops spraying many emails.
         RateLimiter::for('login', fn (Request $request) => [
+            Limit::perMinute(5)->by(Str::lower((string) $request->input('email')).'|'.$request->ip()),
+            Limit::perMinute(20)->by($request->ip()),
+        ]);
+
+        RateLimiter::for('password-reset', fn (Request $request) => [
             Limit::perMinute(5)->by(Str::lower((string) $request->input('email')).'|'.$request->ip()),
             Limit::perMinute(20)->by($request->ip()),
         ]);
