@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Schedule;
 // locally, or a `schedule:run` cron entry in production).
 Schedule::command('helpdesk:prune-login-activities')->daily();
 
+// Removes attachment files left behind by failed uploads or deleted tickets.
+Schedule::command('helpdesk:prune-orphan-attachments')->daily();
+
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');

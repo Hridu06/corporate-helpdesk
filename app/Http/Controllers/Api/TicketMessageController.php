@@ -11,9 +11,12 @@ use App\Http\Resources\TicketMessageResource;
 use App\Models\AuditLog;
 use App\Models\Ticket;
 use App\Models\TicketEvent;
+use App\Models\TicketMessage;
+use App\Support\Attachments\AttachmentStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * The conversation on a ticket. Routes are guarded by TicketPolicy (view / reply /
@@ -23,6 +26,8 @@ use Illuminate\Support\Facades\DB;
 class TicketMessageController extends Controller
 {
     use BuildsTicketDetail;
+
+    public function __construct(private readonly AttachmentStorage $storage) {}
 
     /** The latest messages, oldest first. Pass `before` (a message id) to page back. */
     public function index(Request $request, Ticket $ticket): JsonResponse
@@ -35,7 +40,7 @@ class TicketMessageController extends Controller
 
         $rows = $ticket->messages()
             ->visibleTo($request->user())
-            ->with(['author:id,name', 'author.roles'])
+            ->with(['author:id,name', 'author.roles', 'attachments'])
             ->when($params['before'] ?? null, fn ($query, int $before) => $query->where('id', '<', $before))
             ->latest('id')
             ->limit($perPage + 1)
@@ -61,7 +66,40 @@ class TicketMessageController extends Controller
     {
         $actor = $request->user();
 
-        $message = DB::transaction(function () use ($request, $ticket, $type, $actor) {
+        // Every file is judged before anything is written; a bad file rejects the whole message.
+        $inspected = $this->storage->inspectAll($request->file('attachments', []));
+        $written = [];
+
+        try {
+            $message = $this->saveMessage($request, $ticket, $type, $inspected, $written);
+        } catch (Throwable $e) {
+            // The transaction rolled back; do not leave its files behind.
+            $this->storage->deleteFiles($written);
+            throw $e;
+        }
+
+        if (! $message) {
+            return response()->json([
+                'message' => 'This ticket is closed. Reopen it to add messages.',
+                'code' => 'ticket_closed',
+            ], 422);
+        }
+
+        $message->load(['author:id,name', 'author.roles', 'attachments']);
+
+        return response()->json([
+            'message' => $type === TicketMessageType::InternalNote ? 'Note added.' : 'Reply sent.',
+            'entry' => new TicketMessageResource($message),
+            ...$this->detail($actor, $ticket->refresh()),
+        ], 201);
+    }
+
+    /** @param list<array> $inspected @param list<string> $written */
+    private function saveMessage(StoreTicketMessageRequest $request, Ticket $ticket, TicketMessageType $type, array $inspected, array &$written): ?TicketMessage
+    {
+        $actor = $request->user();
+
+        return DB::transaction(function () use ($request, $ticket, $type, $actor, $inspected, &$written) {
             // Re-read under a lock so a ticket closed a moment ago cannot slip through.
             $locked = Ticket::query()->lockForUpdate()->findOrFail($ticket->id);
 
@@ -69,11 +107,15 @@ class TicketMessageController extends Controller
                 return null;
             }
 
+            $this->storage->assertTicketCapacity($locked, $inspected);
+
             $message = $locked->messages()->create([
                 'user_id' => $actor->id,
                 'type' => $type,
                 'body' => $request->validated('body'),
             ]);
+
+            $this->storage->store($locked, $message, $actor, $inspected, $written);
 
             // The customer answering a resolved ticket means it is not resolved after all.
             if ($type === TicketMessageType::PublicReply
@@ -90,25 +132,10 @@ class TicketMessageController extends Controller
                 $locked->touch();
             }
 
-            // The audit log records that a message was written, never its text.
-            AuditLog::record($actor, 'ticket.'.$type->value, $locked, ['number' => $locked->number], $request->ip());
+            // The audit log records that a message was written (and how many files), never its text.
+            AuditLog::record($actor, 'ticket.'.$type->value, $locked, ['number' => $locked->number, 'attachments' => count($inspected)], $request->ip());
 
             return $message;
         });
-
-        if (! $message) {
-            return response()->json([
-                'message' => 'This ticket is closed. Reopen it to add messages.',
-                'code' => 'ticket_closed',
-            ], 422);
-        }
-
-        $message->load(['author:id,name', 'author.roles']);
-
-        return response()->json([
-            'message' => $type === TicketMessageType::InternalNote ? 'Note added.' : 'Reply sent.',
-            'entry' => new TicketMessageResource($message),
-            ...$this->detail($actor, $ticket->refresh()),
-        ], 201);
     }
 }

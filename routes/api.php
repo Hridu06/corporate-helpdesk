@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\TicketAttachmentController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TicketMessageController;
 use App\Http\Controllers\Api\UserController;
@@ -43,7 +44,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Tickets. Visible to view_all holders, the customer who opened it and its assignee (see TicketPolicy).
     Route::prefix('tickets')->group(function () {
         Route::get('/', [TicketController::class, 'index'])->can('viewAny', Ticket::class);
-        Route::post('/', [TicketController::class, 'store'])->can('create', Ticket::class)->middleware('throttle:ticket-create');
+        Route::post('/', [TicketController::class, 'store'])->can('create', Ticket::class)->middleware(['throttle:ticket-create', 'throttle:ticket-upload']);
         // Must be declared before '/{ticket}' so it is not treated as an id.
         Route::get('/options', [TicketController::class, 'options'])->can('create', Ticket::class);
         Route::get('/{ticket}', [TicketController::class, 'show'])->can('view', 'ticket');
@@ -54,8 +55,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/{ticket}/assignable-agents', [TicketController::class, 'assignableAgents'])->can('assign', 'ticket');
 
         Route::get('/{ticket}/messages', [TicketMessageController::class, 'index'])->can('view', 'ticket');
-        Route::post('/{ticket}/replies', [TicketMessageController::class, 'reply'])->can('reply', 'ticket')->middleware('throttle:ticket-message');
-        Route::post('/{ticket}/internal-notes', [TicketMessageController::class, 'note'])->can('addNote', 'ticket')->middleware('throttle:ticket-message');
+        Route::post('/{ticket}/replies', [TicketMessageController::class, 'reply'])->can('reply', 'ticket')->middleware(['throttle:ticket-message', 'throttle:ticket-upload']);
+        Route::post('/{ticket}/internal-notes', [TicketMessageController::class, 'note'])->can('addNote', 'ticket')->middleware(['throttle:ticket-message', 'throttle:ticket-upload']);
+
+        Route::get('/{ticket}/attachments/{attachment}', [TicketAttachmentController::class, 'download'])
+            ->whereNumber('attachment')->can('view', 'ticket')->middleware('throttle:ticket-download');
     });
 
     // Departments. Managers see all; other viewers (agents) see only their own (see DepartmentPolicy).

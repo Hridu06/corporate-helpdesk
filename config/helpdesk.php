@@ -21,4 +21,36 @@ return [
     */
     'login_activity_retention_days' => (int) env('LOGIN_ACTIVITY_RETENTION_DAYS', 90),
 
+    /*
+    | Ticket attachments. Files live on the private `attachments` disk and are only
+    | ever served through the authorised download endpoint. An extension is accepted
+    | only if the file's detected content type is one of the listed MIME types.
+    | The PHP upload limits (upload_max_filesize / post_max_size) must be at least
+    | as large as max_size_kb / max_request_kb.
+    */
+    'attachments' => [
+        'disk' => 'attachments',
+        'max_size_kb' => (int) env('ATTACHMENT_MAX_SIZE_KB', 5120),
+        'max_files' => (int) env('ATTACHMENT_MAX_FILES', 5),
+        'max_request_kb' => (int) env('ATTACHMENT_MAX_REQUEST_KB', 15360),
+        'max_ticket_files' => (int) env('ATTACHMENT_MAX_TICKET_FILES', 25),
+        'max_ticket_kb' => (int) env('ATTACHMENT_MAX_TICKET_KB', 51200),
+        // Refuse images larger than this many pixels (decompression-bomb guard).
+        'max_image_pixels' => 40_000_000,
+        // Refuse Office files that unpack to more than this many bytes (zip-bomb guard).
+        'max_unpacked_bytes' => 100_000_000,
+        'types' => [
+            'jpg' => ['image/jpeg'],
+            'jpeg' => ['image/jpeg'],
+            'png' => ['image/png'],
+            'webp' => ['image/webp'],
+            'gif' => ['image/gif'],
+            'pdf' => ['application/pdf'],
+            'txt' => ['text/plain'],
+            'csv' => ['text/plain', 'text/csv', 'application/csv'],
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip'],
+            'xlsx' => ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/zip'],
+        ],
+    ],
+
 ];

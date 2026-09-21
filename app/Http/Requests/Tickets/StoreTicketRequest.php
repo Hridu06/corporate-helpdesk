@@ -31,6 +31,9 @@ class StoreTicketRequest extends FormRequest
             'subject' => ['required', 'string', 'max:150'],
             'description' => ['required', 'string', 'max:5000'],
             'department_id' => ['nullable', 'integer', Rule::exists('departments', 'id')->where('is_active', true)],
+            // Only checked for shape here; AttachmentInspector judges the content.
+            'attachments' => ['sometimes', 'array', 'max:'.config('helpdesk.attachments.max_files')],
+            'attachments.*' => ['file'],
         ];
     }
 }

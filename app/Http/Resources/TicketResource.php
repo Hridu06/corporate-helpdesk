@@ -29,6 +29,8 @@ class TicketResource extends JsonResource
             'assignee' => $this->relationLoaded('assignee') && $this->assignee
                 ? ['id' => $this->assignee->id, 'name' => $this->assignee->name]
                 : null,
+            // Files attached when the ticket was opened (only when loaded, i.e. on the detail views).
+            'attachments' => TicketAttachmentResource::collection($this->whenLoaded('openingAttachments')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'resolved_at' => $this->resolved_at,

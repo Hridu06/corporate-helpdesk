@@ -18,6 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // A body over PHP's post_max_size / the web server limit: answer with a clear API error.
+        $exceptions->render(fn (\Illuminate\Http\Exceptions\PostTooLargeException $e, Request $request) => $request->is('api/*')
+            ? response()->json(['message' => 'The upload is too large.', 'code' => 'payload_too_large'], 413)
+            : null);
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );

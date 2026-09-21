@@ -17,7 +17,7 @@ trait BuildsTicketDetail
      */
     private function detail(User $actor, Ticket $ticket): array
     {
-        $ticket->load(['department:id,name', 'customer:id,name,email', 'assignee:id,name']);
+        $ticket->load(['department:id,name', 'customer:id,name,email', 'assignee:id,name', 'openingAttachments']);
 
         $events = $ticket->events()->with('actor:id,name')->latest('id')->limit(100)->get()->reverse()->values();
 

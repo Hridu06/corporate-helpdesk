@@ -21,6 +21,8 @@ class TicketMessageResource extends JsonResource
                     'role' => $this->author->relationLoaded('roles') ? $this->author->roles->first()?->name : null,
                 ]
                 : null,
+            // Already limited to the viewer's messages, so a note's files never reach a customer.
+            'attachments' => TicketAttachmentResource::collection($this->whenLoaded('attachments')),
             'created_at' => $this->created_at,
         ];
     }

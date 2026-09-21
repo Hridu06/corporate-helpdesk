@@ -15,7 +15,10 @@ use App\Models\Department;
 use App\Models\Ticket;
 use App\Models\TicketEvent;
 use App\Models\User;
+use App\Support\Attachments\AttachmentStorage;
 use App\Support\TicketWorkflow;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -28,6 +31,8 @@ use Illuminate\Validation\ValidationException;
 class TicketController extends Controller
 {
     use BuildsTicketDetail;
+
+    public function __construct(private readonly AttachmentStorage $storage) {}
 
     public function index(Request $request)
     {
@@ -77,14 +82,28 @@ class TicketController extends Controller
 
     public function store(StoreTicketRequest $request): JsonResponse
     {
-        $ticket = new Ticket($request->validated());
-        // Set by the backend only, never from the request.
-        $ticket->customer_id = $request->user()->id;
-        $ticket->status = TicketStatus::Open;
-        $ticket->priority = TicketPriority::Medium;
-        $ticket->save();
+        // Files are judged before the ticket exists; a bad file rejects the whole request.
+        $inspected = $this->storage->inspectAll($request->file('attachments', []));
+        $written = [];
 
-        AuditLog::record($request->user(), 'ticket.created', $ticket, ['number' => $ticket->number], $request->ip());
+        try {
+            $ticket = DB::transaction(function () use ($request, $inspected, &$written) {
+                $ticket = new Ticket($request->safe()->except('attachments'));
+                // Set by the backend only, never from the request.
+                $ticket->customer_id = $request->user()->id;
+                $ticket->status = TicketStatus::Open;
+                $ticket->priority = TicketPriority::Medium;
+                $ticket->save();
+
+                $this->storage->store($ticket, null, $request->user(), $inspected, $written);
+                AuditLog::record($request->user(), 'ticket.created', $ticket, ['number' => $ticket->number, 'attachments' => count($inspected)], $request->ip());
+
+                return $ticket;
+            });
+        } catch (Throwable $e) {
+            $this->storage->deleteFiles($written);
+            throw $e;
+        }
 
         return response()->json(['message' => 'Ticket created.', ...$this->detail($request->user(), $ticket)], 201);
     }

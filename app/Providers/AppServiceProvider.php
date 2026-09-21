@@ -64,6 +64,11 @@ class AppServiceProvider extends ServiceProvider
 
         // Keeps one account from flooding the queue with tickets.
         RateLimiter::for('ticket-message', fn (Request $request) => Limit::perHour(120)->by((string) $request->user()?->id));
+        // Counted only for requests that carry files, so plain replies are not affected.
+        RateLimiter::for('ticket-upload', fn (Request $request) => $request->hasFile('attachments')
+            ? Limit::perHour(30)->by((string) $request->user()?->id)
+            : Limit::none());
+        RateLimiter::for('ticket-download', fn (Request $request) => Limit::perMinute(120)->by((string) $request->user()?->id));
         RateLimiter::for('ticket-create', fn (Request $request) => Limit::perHour(30)->by((string) $request->user()?->id));
 
         RateLimiter::for('verification', fn (Request $request) => [

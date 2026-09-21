@@ -64,6 +64,36 @@ class Ticket extends Model
         return $this->hasMany(TicketMessage::class);
     }
 
+    /** Every file on the ticket. Read through TicketAttachment::visibleTo() when serving a viewer. */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(TicketAttachment::class);
+    }
+
+    /** Files attached when the ticket was opened (not to a message); visible to anyone who can see the ticket. */
+    public function openingAttachments(): HasMany
+    {
+        return $this->hasMany(TicketAttachment::class)->whereNull('ticket_message_id');
+    }
+
+    /** Set just before deletion: the database cascade removes the rows before `deleted` fires. */
+    private bool $hadAttachments = false;
+
+    protected static function booted(): void
+    {
+        // Rows go with the ticket by cascade; the files are removed here. Tickets without
+        // attachments never touch the disk.
+        static::deleting(function (self $ticket) {
+            $ticket->hadAttachments = TicketAttachment::query()->where('ticket_id', $ticket->id)->exists();
+        });
+
+        static::deleted(function (self $ticket) {
+            if ($ticket->hadAttachments) {
+                \App\Support\Attachments\AttachmentStorage::disk()->deleteDirectory("tickets/{$ticket->id}");
+            }
+        });
+    }
+
     /** Set the status and keep resolved_at / closed_at consistent with it. */
     public function applyStatus(TicketStatus $to): void
     {
