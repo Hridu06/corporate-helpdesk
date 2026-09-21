@@ -140,6 +140,12 @@ class TicketRecipientsTest extends TestCase
         $this->assertSame([$this->admin->id], $this->ids(TicketActivity::CustomerReply, $this->ticket(['assigned_to' => null]), $this->customer));
     }
 
+    public function test_a_reply_that_reopens_goes_where_a_customer_reply_goes(): void
+    {
+        $this->assertSame([$this->agent->id], $this->ids(TicketActivity::CustomerReplyReopened, $this->ticket(), $this->customer));
+        $this->assertSame([$this->admin->id], $this->ids(TicketActivity::CustomerReplyReopened, $this->ticket(['assigned_to' => null]), $this->customer));
+    }
+
     // ---- Internal notes -----------------------------------------------------
 
     public function test_an_internal_note_goes_to_the_assignee_unless_they_wrote_it(): void

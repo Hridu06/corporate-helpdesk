@@ -42,7 +42,8 @@ final class TicketRecipients
             TicketActivity::CustomerClosed,
             TicketActivity::CustomerReopened => collect([$ticket->assignee]),
 
-            TicketActivity::CustomerReply => $ticket->assignee ? collect([$ticket->assignee]) : self::assigners(),
+            TicketActivity::CustomerReply,
+            TicketActivity::CustomerReplyReopened => $ticket->assignee ? collect([$ticket->assignee]) : self::assigners(),
         };
 
         return $candidates

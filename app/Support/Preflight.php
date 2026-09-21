@@ -90,6 +90,24 @@ final class Preflight
             $add(self::WARN, 'Scheduler is running', 'Cache unavailable: '.$e->getMessage());
         }
 
+        // ---- Queue (ticket notification emails are queued)
+        $connection = (string) config('queue.default');
+        $should($connection !== 'sync', 'Queue runs in the background', 'QUEUE_CONNECTION=sync sends ticket emails inside the web request (slower, and an SMTP outage delays users). Use "database" and run `php artisan queue:work`.');
+
+        if ($connection === 'database') {
+            try {
+                $waiting = DB::table(config('queue.connections.database.table', 'jobs'))
+                    ->where('created_at', '<', now()->subMinutes(5)->getTimestamp())
+                    ->count();
+                $should($waiting === 0, 'No queued jobs are stuck', "{$waiting} job(s) have waited over 5 minutes: is `php artisan queue:work` running (Supervisor)?");
+
+                $failed = DB::table(config('queue.failed.table', 'failed_jobs'))->count();
+                $should($failed === 0, 'No failed queue jobs', "{$failed} failed job(s): inspect with `php artisan queue:failed`, retry with `php artisan queue:retry all`.");
+            } catch (Throwable $e) {
+                $add(self::WARN, 'Queue tables are readable', $e->getMessage());
+            }
+        }
+
         return $results;
     }
 

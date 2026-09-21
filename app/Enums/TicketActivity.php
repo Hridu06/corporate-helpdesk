@@ -10,6 +10,8 @@ enum TicketActivity: string
     case Assigned = 'assigned';
     case StaffReply = 'staff_reply';
     case CustomerReply = 'customer_reply';
+    /** The customer answered a resolved ticket, which reopened it: one email, not a reply email plus a reopen email. */
+    case CustomerReplyReopened = 'customer_reply_reopened';
     case InternalNote = 'internal_note';
     case Resolved = 'resolved';
     case Closed = 'closed';
@@ -35,6 +37,7 @@ enum TicketActivity: string
             self::Assigned => 'Assigned to you',
             self::StaffReply => 'New reply',
             self::CustomerReply => 'Customer replied',
+            self::CustomerReplyReopened => 'Customer replied and reopened',
             self::InternalNote => 'New internal note',
             self::Resolved => 'Resolved',
             self::Closed => 'Closed',
@@ -53,6 +56,7 @@ enum TicketActivity: string
             self::Assigned => 'This ticket was assigned to you.',
             self::StaffReply => 'There is a new reply on your ticket.',
             self::CustomerReply => 'The customer replied to this ticket.',
+            self::CustomerReplyReopened => 'The customer replied and reopened this ticket.',
             self::InternalNote => 'A staff-only note was added to this ticket.',
             self::Resolved => 'Your ticket was marked resolved.',
             self::Closed => 'Your ticket was closed.',

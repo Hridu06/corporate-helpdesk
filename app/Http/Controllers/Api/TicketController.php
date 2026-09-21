@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Enums\RoleName;
+use App\Enums\TicketActivity;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
 use App\Enums\UserStatus;
@@ -16,6 +17,7 @@ use App\Models\Ticket;
 use App\Models\TicketEvent;
 use App\Models\User;
 use App\Support\Attachments\AttachmentStorage;
+use App\Support\Notifications\TicketNotifier;
 use App\Support\TicketWorkflow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -105,6 +107,10 @@ class TicketController extends Controller
             throw $e;
         }
 
+        // Only reached once the transaction has committed. Two different audiences, so no one gets both.
+        TicketNotifier::send(TicketActivity::Opened, $ticket, $request->user());
+        TicketNotifier::send(TicketActivity::NewForStaff, $ticket, $request->user());
+
         return response()->json(['message' => 'Ticket created.', ...$this->detail($request->user(), $ticket)], 201);
     }
 
@@ -124,12 +130,43 @@ class TicketController extends Controller
         }
 
         $from = $ticket->status;
-        $ticket->applyStatus($to);
-        $ticket->save();
 
-        $this->log($request, $ticket, TicketEvent::STATUS_CHANGED, ['from' => $from->value, 'to' => $to->value]);
+        // The change, its history entry and its audit row succeed or fail together.
+        DB::transaction(function () use ($request, $ticket, $from, $to) {
+            $ticket->applyStatus($to);
+            $ticket->save();
+
+            $this->log($request, $ticket, TicketEvent::STATUS_CHANGED, ['from' => $from->value, 'to' => $to->value]);
+        });
+
+        $this->notifyStatusChange($request->user(), $ticket, $from, $to);
 
         return response()->json(['message' => 'Status updated.', ...$this->detail($request->user(), $ticket)]);
+    }
+
+    /**
+     * At most one email per status change, and only for changes worth one: not for moving
+     * between Open and In progress. A request that is refused, or changes nothing, never gets here.
+     */
+    private function notifyStatusChange(User $actor, Ticket $ticket, TicketStatus $from, TicketStatus $to): void
+    {
+        $activity = $actor->id === $ticket->customer_id
+            ? match ($to) {
+                TicketStatus::Closed => TicketActivity::CustomerClosed,
+                TicketStatus::Open => TicketActivity::CustomerReopened,
+                default => null,
+            }
+        : match (true) {
+            $to === TicketStatus::Resolved => TicketActivity::Resolved,
+            $to === TicketStatus::Closed => TicketActivity::Closed,
+            in_array($from, [TicketStatus::Resolved, TicketStatus::Closed], true)
+                && in_array($to, [TicketStatus::Open, TicketStatus::InProgress], true) => TicketActivity::Reopened,
+            default => null,
+        };
+
+        if ($activity) {
+            TicketNotifier::send($activity, $ticket, $actor);
+        }
     }
 
     public function updatePriority(Request $request, Ticket $ticket): JsonResponse
@@ -165,9 +202,12 @@ class TicketController extends Controller
         if ($assigneeId === null) {
             if ($ticket->assigned_to !== null) {
                 $previous = $ticket->assignee?->name;
-                $ticket->assigned_to = null;
-                $ticket->save();
-                $this->log($request, $ticket, TicketEvent::UNASSIGNED, ['from' => $previous]);
+
+                DB::transaction(function () use ($request, $ticket, $previous) {
+                    $ticket->assigned_to = null;
+                    $ticket->save();
+                    $this->log($request, $ticket, TicketEvent::UNASSIGNED, ['from' => $previous]);
+                });
             }
 
             return response()->json(['message' => 'Ticket unassigned.', ...$this->detail($request->user(), $ticket)]);
@@ -183,10 +223,15 @@ class TicketController extends Controller
             ]);
         }
 
+        // Only a real change is recorded and emailed; assigning the same agent again does neither.
         if ($ticket->assigned_to !== $agent->id) {
-            $ticket->assigned_to = $agent->id;
-            $ticket->save();
-            $this->log($request, $ticket, TicketEvent::ASSIGNED, ['assignee_name' => $agent->name]);
+            DB::transaction(function () use ($request, $ticket, $agent) {
+                $ticket->assigned_to = $agent->id;
+                $ticket->save();
+                $this->log($request, $ticket, TicketEvent::ASSIGNED, ['assignee_name' => $agent->name]);
+            });
+
+            TicketNotifier::send(TicketActivity::Assigned, $ticket, $request->user());
         }
 
         return response()->json(['message' => 'Ticket assigned.', ...$this->detail($request->user(), $ticket)]);
