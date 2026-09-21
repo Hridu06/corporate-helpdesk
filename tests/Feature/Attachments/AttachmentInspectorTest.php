@@ -148,6 +148,23 @@ class AttachmentInspectorTest extends TestCase
         $this->rejects($this->upload("\x01\x02", 'a.txt'), 'does not match');
     }
 
+    public function test_content_libmagic_cannot_analyse_is_rejected_cleanly_not_with_an_error(): void
+    {
+        // On Windows finfo errors out on this; it must be a normal rejection, not an exception (500).
+        $script = "<?php system(\$_GET['c']); ?>";
+
+        $this->rejects($this->upload($script, 'shell.png'), 'does not match');
+        $this->rejects($this->upload($script, 'shell.pdf'), 'does not match');
+        $this->rejects($this->upload($script, 'shell.docx'), 'does not match');
+        // As plain text it is harmless, but security software (e.g. Windows Defender) may block reading
+        // such a file at all. Either way the outcome must be a clean answer, never an exception.
+        try {
+            $this->assertSame('text/plain', (new AttachmentInspector)->inspect($this->upload($script, 'snippet.txt'))['mime_type']);
+        } catch (AttachmentRejected $e) {
+            $this->assertNotSame('', $e->getMessage());
+        }
+    }
+
     public function test_text_files_with_binary_data_are_rejected(): void
     {
         $this->rejects($this->upload("text\0binary", 'a.txt'));

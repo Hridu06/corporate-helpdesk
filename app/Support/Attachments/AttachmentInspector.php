@@ -12,8 +12,27 @@ use ZipArchive;
  */
 final class AttachmentInspector
 {
-    /** @return array{extension: string, mime_type: string, size: int, sha256: string} */
+    /**
+     * Fails closed: anything unexpected while reading or checking the file (an unreadable
+     * file, a security product blocking access, a library error) rejects it instead of
+     * surfacing as a server error.
+     *
+     * @return array{extension: string, mime_type: string, size: int, sha256: string}
+     */
     public function inspect(UploadedFile $file): array
+    {
+        try {
+            return $this->examine($file);
+        } catch (AttachmentRejected $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            throw new AttachmentRejected('The file could not be checked, so it was not accepted.');
+        }
+    }
+
+    /** @return array{extension: string, mime_type: string, size: int, sha256: string} */
+    private function examine(UploadedFile $file): array
     {
         if (! $file->isValid()) {
             throw new AttachmentRejected('The file could not be uploaded. Please try again.');
@@ -39,7 +58,13 @@ final class AttachmentInspector
             throw new AttachmentRejected('This file type is not allowed. Allowed: '.implode(', ', array_keys($config['types'])).'.');
         }
 
-        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path) ?: 'application/octet-stream';
+        // libmagic can fail outright on some content (on Windows it errors on e.g. `$_GET['c']`); a file
+        // whose type cannot be established is treated as unknown, never as accepted.
+        try {
+            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($path) ?: 'application/octet-stream';
+        } catch (\Throwable) {
+            $mime = 'application/octet-stream';
+        }
 
         // libmagic cannot classify very short text files (e.g. "1"); judge those by their content instead.
         if ($mime === 'application/octet-stream' && in_array($extension, ['txt', 'csv'], true) && $this->looksLikeText($path)) {

@@ -33,7 +33,9 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Off: this app never issues temporary URLs, and the built-in /storage route would
+            // otherwise answer (403) for anything under storage/app/private, attachments included.
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],
@@ -44,6 +46,16 @@ return [
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
             'throw' => false,
+            'report' => false,
+        ],
+
+        // Ticket attachments: outside the web root, no public URL, never served directly.
+        'attachments' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/attachments'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
             'report' => false,
         ],
 
