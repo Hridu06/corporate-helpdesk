@@ -63,6 +63,13 @@ return [
     'trusted_proxies' => env('TRUSTED_PROXIES'),
 
     /*
+    | Emails about ticket activity (opened, assigned, replied, resolved, ...). They are queued:
+    | production needs a running `php artisan queue:work`; QUEUE_CONNECTION=sync sends them at
+    | once (development, tests). Set to false to switch every ticket email off.
+    */
+    'ticket_notifications' => (bool) env('TICKET_NOTIFICATIONS_ENABLED', true),
+
+    /*
     | Extra origins allowed by CORS besides FRONTEND_URL (comma-separated, no trailing slash).
     */
     'cors_extra_origins' => env('CORS_ALLOWED_ORIGINS'),
