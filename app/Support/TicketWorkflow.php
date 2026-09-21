@@ -47,7 +47,7 @@ final class TicketWorkflow
         return [];
     }
 
-    /** @return array{allowed_statuses: list<string>, can_change_status: bool, can_change_priority: bool, can_assign: bool} */
+    /** @return array{allowed_statuses: list<string>, can_change_status: bool, can_change_priority: bool, can_assign: bool, can_reply: bool, can_add_note: bool, can_view_notes: bool} */
     public static function abilities(User $actor, Ticket $ticket): array
     {
         $allowed = self::allowedStatuses($actor, $ticket);
@@ -60,6 +60,10 @@ final class TicketWorkflow
             'can_change_status' => $allowed !== [],
             'can_change_priority' => $editable && $actor->can('ticket.update_priority'),
             'can_assign' => $editable && $actor->can('ticket.assign'),
+            // A closed ticket takes no new messages until it is reopened.
+            'can_reply' => $editable && $actor->can('ticket.reply'),
+            'can_add_note' => $editable && $actor->can('ticket.internal_note'),
+            'can_view_notes' => $canView && $actor->can('ticket.internal_note'),
         ];
     }
 }

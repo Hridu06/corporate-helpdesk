@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\TicketMessageController;
 use App\Http\Controllers\Api\UserController;
 use App\Models\Department;
 use App\Models\LoginActivity;
@@ -51,6 +52,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::put('/{ticket}/priority', [TicketController::class, 'updatePriority'])->can('changePriority', 'ticket');
         Route::put('/{ticket}/assignee', [TicketController::class, 'updateAssignee'])->can('assign', 'ticket');
         Route::get('/{ticket}/assignable-agents', [TicketController::class, 'assignableAgents'])->can('assign', 'ticket');
+
+        Route::get('/{ticket}/messages', [TicketMessageController::class, 'index'])->can('view', 'ticket');
+        Route::post('/{ticket}/replies', [TicketMessageController::class, 'reply'])->can('reply', 'ticket')->middleware('throttle:ticket-message');
+        Route::post('/{ticket}/internal-notes', [TicketMessageController::class, 'note'])->can('addNote', 'ticket')->middleware('throttle:ticket-message');
     });
 
     // Departments. Managers see all; other viewers (agents) see only their own (see DepartmentPolicy).

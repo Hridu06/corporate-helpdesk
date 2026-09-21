@@ -6,9 +6,9 @@ use App\Enums\RoleName;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
 use App\Enums\UserStatus;
+use App\Http\Controllers\Api\Concerns\BuildsTicketDetail;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tickets\StoreTicketRequest;
-use App\Http\Resources\TicketEventResource;
 use App\Http\Resources\TicketResource;
 use App\Models\AuditLog;
 use App\Models\Department;
@@ -27,6 +27,8 @@ use Illuminate\Validation\ValidationException;
  */
 class TicketController extends Controller
 {
+    use BuildsTicketDetail;
+
     public function index(Request $request)
     {
         $filters = $request->validate([
@@ -213,17 +215,4 @@ class TicketController extends Controller
         AuditLog::record($request->user(), 'ticket.'.$type, $ticket, ['number' => $ticket->number] + $data, $request->ip());
     }
 
-    /** The ticket with what the current user may do to it, and its history (oldest first). */
-    private function detail(User $actor, Ticket $ticket): array
-    {
-        $ticket->load(['department:id,name', 'customer:id,name,email', 'assignee:id,name']);
-
-        $events = $ticket->events()->with('actor:id,name')->latest('id')->limit(100)->get()->reverse()->values();
-
-        return [
-            'ticket' => new TicketResource($ticket),
-            'abilities' => TicketWorkflow::abilities($actor, $ticket),
-            'events' => TicketEventResource::collection($events),
-        ];
-    }
 }

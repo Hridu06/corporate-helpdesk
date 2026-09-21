@@ -44,4 +44,15 @@ class TicketPolicy
     {
         return $this->view($actor, $ticket) && $actor->can('ticket.assign');
     }
+
+    /** Whether the ticket is closed is decided by the controller (422); this only gates the endpoint. */
+    public function reply(User $actor, Ticket $ticket): bool
+    {
+        return $this->view($actor, $ticket) && $actor->can('ticket.reply');
+    }
+
+    public function addNote(User $actor, Ticket $ticket): bool
+    {
+        return $this->view($actor, $ticket) && $actor->can('ticket.internal_note');
+    }
 }

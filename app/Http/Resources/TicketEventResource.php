@@ -15,6 +15,8 @@ class TicketEventResource extends JsonResource
             'type' => $this->type,
             'from' => $this->data['from'] ?? null,
             'to' => $this->data['to'] ?? null,
+            // Set when the change was a side effect of something else, e.g. 'customer_reply'.
+            'reason' => $this->data['reason'] ?? null,
             'assignee_name' => $this->data['assignee_name'] ?? null,
             'actor' => $this->relationLoaded('actor') && $this->actor
                 ? ['id' => $this->actor->id, 'name' => $this->actor->name]

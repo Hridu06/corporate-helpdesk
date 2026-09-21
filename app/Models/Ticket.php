@@ -59,6 +59,11 @@ class Ticket extends Model
         return $this->hasMany(TicketEvent::class);
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(TicketMessage::class);
+    }
+
     /** Set the status and keep resolved_at / closed_at consistent with it. */
     public function applyStatus(TicketStatus $to): void
     {
