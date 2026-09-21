@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\TicketAttachmentController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TicketMessageController;
@@ -37,6 +38,15 @@ Route::post('/reset-password', [PasswordResetController::class, 'reset'])
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+
+    // Ticket statistics (aggregate numbers only): requires the `report.view` permission.
+    Route::prefix('reports')->middleware('can:report.view')->group(function () {
+        Route::get('/options', [ReportController::class, 'options']);
+        Route::get('/overview', [ReportController::class, 'overview']);
+        Route::get('/timeline', [ReportController::class, 'timeline']);
+        Route::get('/breakdown', [ReportController::class, 'breakdown']);
+        Route::get('/agents', [ReportController::class, 'agents']);
+    });
 
     // Sign-in history (IP addresses and devices): requires the `activity.view` permission.
     Route::get('/login-activities', [LoginActivityController::class, 'index'])->can('viewAny', LoginActivity::class);

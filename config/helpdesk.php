@@ -54,6 +54,12 @@ return [
     ],
 
     /*
+    | The time zone whose calendar days Reports counts in (period boundaries and per-day figures),
+    | e.g. "Asia/Dhaka". Tickets are stored in UTC either way.
+    */
+    'reports_timezone' => env('REPORTS_TIMEZONE', 'UTC'),
+
+    /*
     | Reverse proxies / load balancers whose X-Forwarded-* headers are believed: empty
     | (default) trusts none, "*" trusts every caller (only safe when the app is reachable
     | solely through the proxy), otherwise a comma-separated list of IPs or CIDR ranges.
