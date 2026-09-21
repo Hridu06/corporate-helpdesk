@@ -27,4 +27,21 @@ class TicketPolicy
     {
         return $actor->can('ticket.create');
     }
+
+    /** Which transitions are allowed is decided by TicketWorkflow; this only gates the endpoint. */
+    public function changeStatus(User $actor, Ticket $ticket): bool
+    {
+        return $this->view($actor, $ticket)
+            && ($actor->can('ticket.update_status') || ($ticket->customer_id === $actor->id && $actor->can('ticket.close')));
+    }
+
+    public function changePriority(User $actor, Ticket $ticket): bool
+    {
+        return $this->view($actor, $ticket) && $actor->can('ticket.update_priority');
+    }
+
+    public function assign(User $actor, Ticket $ticket): bool
+    {
+        return $this->view($actor, $ticket) && $actor->can('ticket.assign');
+    }
 }

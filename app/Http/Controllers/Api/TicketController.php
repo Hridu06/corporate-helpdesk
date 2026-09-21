@@ -2,16 +2,24 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\RoleName;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
+use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tickets\StoreTicketRequest;
+use App\Http\Resources\TicketEventResource;
 use App\Http\Resources\TicketResource;
 use App\Models\AuditLog;
 use App\Models\Department;
 use App\Models\Ticket;
+use App\Models\TicketEvent;
+use App\Models\User;
+use App\Support\TicketWorkflow;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Authorisation is declared on the routes (`can:` -> TicketPolicy). The list is
@@ -60,11 +68,9 @@ class TicketController extends Controller
         return TicketResource::collection($tickets);
     }
 
-    public function show(Ticket $ticket): JsonResponse
+    public function show(Request $request, Ticket $ticket): JsonResponse
     {
-        $ticket->load(['department:id,name', 'customer:id,name,email', 'assignee:id,name']);
-
-        return response()->json(['ticket' => new TicketResource($ticket)]);
+        return response()->json($this->detail($request->user(), $ticket));
     }
 
     public function store(StoreTicketRequest $request): JsonResponse
@@ -78,10 +84,99 @@ class TicketController extends Controller
 
         AuditLog::record($request->user(), 'ticket.created', $ticket, ['number' => $ticket->number], $request->ip());
 
+        return response()->json(['message' => 'Ticket created.', ...$this->detail($request->user(), $ticket)], 201);
+    }
+
+    /** Move the ticket to another status if TicketWorkflow allows it for this user. */
+    public function updateStatus(Request $request, Ticket $ticket): JsonResponse
+    {
+        $data = $request->validate(['status' => ['required', Rule::enum(TicketStatus::class)]]);
+        $to = TicketStatus::from($data['status']);
+        $allowed = TicketWorkflow::allowedStatuses($request->user(), $ticket);
+
+        if (! in_array($to->value, $allowed, true)) {
+            return response()->json([
+                'message' => 'This ticket cannot be moved to that status.',
+                'code' => 'invalid_transition',
+                'allowed' => $allowed,
+            ], 422);
+        }
+
+        $from = $ticket->status;
+        $ticket->applyStatus($to);
+        $ticket->save();
+
+        $this->log($request, $ticket, TicketEvent::STATUS_CHANGED, ['from' => $from->value, 'to' => $to->value]);
+
+        return response()->json(['message' => 'Status updated.', ...$this->detail($request->user(), $ticket)]);
+    }
+
+    public function updatePriority(Request $request, Ticket $ticket): JsonResponse
+    {
+        if ($closed = $this->refuseIfClosed($ticket)) {
+            return $closed;
+        }
+
+        $data = $request->validate(['priority' => ['required', Rule::enum(TicketPriority::class)]]);
+        $to = TicketPriority::from($data['priority']);
+
+        if ($ticket->priority !== $to) {
+            $from = $ticket->priority;
+            $ticket->priority = $to;
+            $ticket->save();
+
+            $this->log($request, $ticket, TicketEvent::PRIORITY_CHANGED, ['from' => $from->value, 'to' => $to->value]);
+        }
+
+        return response()->json(['message' => 'Priority updated.', ...$this->detail($request->user(), $ticket)]);
+    }
+
+    /** Assign to an active agent (a member of the ticket's department, if it has one), or clear with null. */
+    public function updateAssignee(Request $request, Ticket $ticket): JsonResponse
+    {
+        if ($closed = $this->refuseIfClosed($ticket)) {
+            return $closed;
+        }
+
+        $data = $request->validate(['assignee_id' => ['present', 'nullable', 'integer']]);
+        $assigneeId = $data['assignee_id'];
+
+        if ($assigneeId === null) {
+            if ($ticket->assigned_to !== null) {
+                $previous = $ticket->assignee?->name;
+                $ticket->assigned_to = null;
+                $ticket->save();
+                $this->log($request, $ticket, TicketEvent::UNASSIGNED, ['from' => $previous]);
+            }
+
+            return response()->json(['message' => 'Ticket unassigned.', ...$this->detail($request->user(), $ticket)]);
+        }
+
+        $agent = $this->assignableAgentsQuery($ticket)->whereKey($assigneeId)->first();
+
+        if (! $agent) {
+            throw ValidationException::withMessages([
+                'assignee_id' => $ticket->department_id
+                    ? "Choose an active agent who belongs to this ticket's department."
+                    : 'Choose an active agent.',
+            ]);
+        }
+
+        if ($ticket->assigned_to !== $agent->id) {
+            $ticket->assigned_to = $agent->id;
+            $ticket->save();
+            $this->log($request, $ticket, TicketEvent::ASSIGNED, ['assignee_name' => $agent->name]);
+        }
+
+        return response()->json(['message' => 'Ticket assigned.', ...$this->detail($request->user(), $ticket)]);
+    }
+
+    /** Agents this ticket can be assigned to (drives the assignee picker). */
+    public function assignableAgents(Ticket $ticket): JsonResponse
+    {
         return response()->json([
-            'message' => 'Ticket created.',
-            'ticket' => new TicketResource($ticket->load(['department:id,name', 'customer:id,name,email', 'assignee:id,name'])),
-        ], 201);
+            'agents' => $this->assignableAgentsQuery($ticket)->orderBy('name')->get(['users.id', 'users.name', 'users.email']),
+        ]);
     }
 
     /** Choices for the "new ticket" form: only active departments. */
@@ -90,5 +185,45 @@ class TicketController extends Controller
         return response()->json([
             'departments' => Department::query()->where('is_active', true)->orderBy('name')->get(['id', 'name']),
         ]);
+    }
+
+    private function assignableAgentsQuery(Ticket $ticket)
+    {
+        return User::query()
+            ->role(RoleName::Agent->value)
+            ->where('status', UserStatus::Active->value)
+            ->when($ticket->department_id, fn ($query, int $departmentId) => $query->whereHas(
+                'departments',
+                fn ($q) => $q->whereKey($departmentId),
+            ));
+    }
+
+    /** A closed ticket is read-only apart from being reopened. */
+    private function refuseIfClosed(Ticket $ticket): ?JsonResponse
+    {
+        return $ticket->status === TicketStatus::Closed
+            ? response()->json(['message' => 'This ticket is closed. Reopen it to make changes.', 'code' => 'ticket_closed'], 422)
+            : null;
+    }
+
+    /** Write the change to the ticket's history and to the global audit log. */
+    private function log(Request $request, Ticket $ticket, string $type, array $data): void
+    {
+        TicketEvent::record($ticket, $request->user(), $type, $data);
+        AuditLog::record($request->user(), 'ticket.'.$type, $ticket, ['number' => $ticket->number] + $data, $request->ip());
+    }
+
+    /** The ticket with what the current user may do to it, and its history (oldest first). */
+    private function detail(User $actor, Ticket $ticket): array
+    {
+        $ticket->load(['department:id,name', 'customer:id,name,email', 'assignee:id,name']);
+
+        $events = $ticket->events()->with('actor:id,name')->latest('id')->limit(100)->get()->reverse()->values();
+
+        return [
+            'ticket' => new TicketResource($ticket),
+            'abilities' => TicketWorkflow::abilities($actor, $ticket),
+            'events' => TicketEventResource::collection($events),
+        ];
     }
 }

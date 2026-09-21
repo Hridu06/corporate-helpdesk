@@ -46,6 +46,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         // Must be declared before '/{ticket}' so it is not treated as an id.
         Route::get('/options', [TicketController::class, 'options'])->can('create', Ticket::class);
         Route::get('/{ticket}', [TicketController::class, 'show'])->can('view', 'ticket');
+        // Which status changes are allowed is decided by App\Support\TicketWorkflow (checked in the controller).
+        Route::post('/{ticket}/status', [TicketController::class, 'updateStatus'])->can('changeStatus', 'ticket');
+        Route::put('/{ticket}/priority', [TicketController::class, 'updatePriority'])->can('changePriority', 'ticket');
+        Route::put('/{ticket}/assignee', [TicketController::class, 'updateAssignee'])->can('assign', 'ticket');
+        Route::get('/{ticket}/assignable-agents', [TicketController::class, 'assignableAgents'])->can('assign', 'ticket');
     });
 
     // Departments. Managers see all; other viewers (agents) see only their own (see DepartmentPolicy).

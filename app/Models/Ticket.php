@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 // Only what a requester supplies is mass-assignable. Status, priority, customer and
 // assignee are always set by backend code (never taken from a request body).
@@ -51,5 +52,18 @@ class Ticket extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function events(): HasMany
+    {
+        return $this->hasMany(TicketEvent::class);
+    }
+
+    /** Set the status and keep resolved_at / closed_at consistent with it. */
+    public function applyStatus(TicketStatus $to): void
+    {
+        $this->status = $to;
+        $this->resolved_at = $to === TicketStatus::Resolved ? now() : ($to === TicketStatus::Closed ? $this->resolved_at : null);
+        $this->closed_at = $to === TicketStatus::Closed ? now() : null;
     }
 }
