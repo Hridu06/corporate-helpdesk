@@ -39,9 +39,10 @@ Implemented and covered by automated tests:
 - **Conversation:** public replies and staff-only **internal notes**. Internal notes are never returned to customers by any endpoint. A customer reply on a Resolved ticket reopens it.
 - **Attachments** on new tickets, replies and internal notes (see [Attachments](#attachments-security-and-storage)).
 - **Ticket notification emails** (see [Queue worker and ticket emails](#queue-worker-and-ticket-emails)): the customer hears when a ticket is received, replied to, resolved, closed or reopened; the assignee when a ticket is assigned to them, the customer replies, or a note is added. They are short notices with a sign-in link and never contain message text.
-- **Web app screens:** sign in, register, verify email, forgot/reset password, role-aware dashboard and sidebar, tickets (list, new, detail), users, departments, login activity.
+- **Reports** (for people with `report.view`): tickets created and resolved, tickets open and unassigned now, average resolution time, average first-response time, reopened tickets, a per-day (per-week on long periods) chart, breakdowns by status, priority, department and age of open tickets, and a table per agent. Any period up to 366 days, optionally for one department. The API returns aggregate numbers only (never a subject, message or customer detail); the page explains how each figure is counted. Days are counted in `REPORTS_TIMEZONE` (default UTC).
+- **Web app screens:** sign in, register, verify email, forgot/reset password, role-aware dashboard and sidebar, tickets (list, new, detail), users, departments, login activity, reports.
 
-Present in the navigation as "coming soon" placeholders, **not built yet:** Roles & Permissions, Reports, System Settings.
+Present in the navigation as "coming soon" placeholders, **not built yet:** Roles & Permissions, System Settings.
 
 ## Roles and permissions
 
@@ -50,7 +51,7 @@ Roles and permissions use [spatie/laravel-permission](https://spatie.be/docs/lar
 | Role | Default abilities |
 |---|---|
 | **Super Admin** | Everything, implicitly. Created only from the command line (`helpdesk:create-super-admin`), never through the API. |
-| **Admin** | View/create/update users; view/update departments; see all tickets; assign, change priority and status; reply and write internal notes; `report.view` (there is no reports screen yet). |
+| **Admin** | View/create/update users; view/update departments; see all tickets; assign, change priority and status; reply and write internal notes; `report.view` (Reports). |
 | **Agent** | View departments; see **only tickets assigned to them**; change status, reply, write internal notes. |
 | **Customer** | Create tickets; see **only their own tickets**; reply; close or reopen their own resolved tickets. Never sees internal notes. |
 
@@ -123,6 +124,7 @@ Copy `.env.example` (development) or `.env.production.example` (production templ
 | Mail | `MAIL_MAILER`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SCHEME`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | `log` by default (development only). |
 | Sign-in tokens | `AUTH_TOKEN_TTL`, `AUTH_REMEMBER_TOKEN_TTL`, `SANCTUM_EXPIRATION` | Minutes. Defaults: 720 (12 h), 43200 (30 days). |
 | Retention | `LOGIN_ACTIVITY_RETENTION_DAYS` | Default 90. |
+| Reports | `REPORTS_TIMEZONE` | Time zone whose calendar days Reports counts in, e.g. `Asia/Dhaka` (default `UTC`). Tickets are stored in UTC either way. |
 | Attachments | `ATTACHMENT_MAX_SIZE_KB`, `ATTACHMENT_MAX_FILES`, `ATTACHMENT_MAX_REQUEST_KB`, `ATTACHMENT_MAX_TICKET_FILES`, `ATTACHMENT_MAX_TICKET_KB` | Defaults: 5 MB per file, 5 files, 15 MB per request, 25 files and 50 MB per ticket. |
 | Queue / ticket emails | `QUEUE_CONNECTION`, `TICKET_NOTIFICATIONS_ENABLED` | `sync` in development; **`database` in production, with a running worker**. The switch (default `true`) turns all ticket emails off. |
 | Network | `TRUSTED_PROXIES`, `HSTS_ENABLED`, `HSTS_MAX_AGE` | See the deployment guide. |
@@ -277,7 +279,8 @@ src/
 
 - Ticket emails cannot be answered by email, carry no message text, and have no per-user opt-out or digest.
 - No real-time updates; a page shows new messages after a reload.
-- Reports, role/permission editing and system settings screens are not built.
+- Role/permission editing and system settings screens are not built.
+- Reports have no CSV export or caching, and agent figures follow each ticket's current assignee (assignment history is not replayed). There are no service-level targets (SLA) yet.
 - Sign-in tokens are kept in the browser's `sessionStorage` (or `localStorage` with "remember me").
 - Account emails are sent during the request; a mail outage is logged and does not change API answers.
 - Ticket emails need a queue worker in production; a retried job could, rarely, send a second copy.
