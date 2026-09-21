@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\RoleController;
 use App\Http\Controllers\Api\TicketAttachmentController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\TicketMessageController;
@@ -47,6 +48,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/breakdown', [ReportController::class, 'breakdown']);
         Route::get('/agents', [ReportController::class, 'agents']);
     });
+
+    // What each role may do. Reading needs `role.view`; changing needs `permission.assign`
+    // (and RoleManager enforces who may change which role, whatever the route allows).
+    Route::get('/roles', [RoleController::class, 'index'])->middleware('can:role.view');
+    Route::get('/permissions', [RoleController::class, 'permissions'])->middleware('can:role.view');
+    Route::get('/roles/{role}/history', [RoleController::class, 'history'])->middleware('can:role.view');
+    Route::put('/roles/{role}/permissions', [RoleController::class, 'update'])->middleware('can:permission.assign');
+    Route::post('/roles/{role}/reset', [RoleController::class, 'reset'])->middleware('can:permission.assign');
 
     // Sign-in history (IP addresses and devices): requires the `activity.view` permission.
     Route::get('/login-activities', [LoginActivityController::class, 'index'])->can('viewAny', LoginActivity::class);

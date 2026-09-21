@@ -40,9 +40,10 @@ Implemented and covered by automated tests:
 - **Attachments** on new tickets, replies and internal notes (see [Attachments](#attachments-security-and-storage)).
 - **Ticket notification emails** (see [Queue worker and ticket emails](#queue-worker-and-ticket-emails)): the customer hears when a ticket is received, replied to, resolved, closed or reopened; the assignee when a ticket is assigned to them, the customer replies, or a note is added. They are short notices with a sign-in link and never contain message text.
 - **Reports** (for people with `report.view`): tickets created and resolved, tickets open and unassigned now, average resolution time, average first-response time, reopened tickets, a per-day (per-week on long periods) chart, breakdowns by status, priority, department and age of open tickets, and a table per agent. Any period up to 366 days, optionally for one department. The API returns aggregate numbers only (never a subject, message or customer detail); the page explains how each figure is counted. Days are counted in `REPORTS_TIMEZONE` (default UTC).
-- **Web app screens:** sign in, register, verify email, forgot/reset password, role-aware dashboard and sidebar, tickets (list, new, detail), users, departments, login activity, reports.
+- **Roles & Permissions** (see [below](#editing-roles-and-permissions)): a Super Admin can change what Admin, Agent and Customer may do, with a confirmation step, change history and reset to defaults.
+- **Web app screens:** sign in, register, verify email, forgot/reset password, role-aware dashboard and sidebar, tickets (list, new, detail), users, departments, login activity, reports, roles & permissions.
 
-Present in the navigation as "coming soon" placeholders, **not built yet:** Roles & Permissions, System Settings.
+Present in the navigation as a "coming soon" placeholder, **not built yet:** System Settings.
 
 ## Roles and permissions
 
@@ -56,6 +57,20 @@ Roles and permissions use [spatie/laravel-permission](https://spatie.be/docs/lar
 | **Customer** | Create tickets; see **only their own tickets**; reply; close or reopen their own resolved tickets. Never sees internal notes. |
 
 Ticket visibility is the same rule everywhere: a user with `ticket.view_all`, the customer who opened the ticket, or its assignee. Seeding is idempotent and never overwrites permissions that were changed on an existing role.
+
+### Editing roles and permissions
+
+Endpoints: `GET /api/roles`, `GET /api/permissions`, `GET /api/roles/{role}/history` (need `role.view`); `PUT /api/roles/{role}/permissions` and `POST /api/roles/{role}/reset` (need `permission.assign`). Only the four built-in roles exist; roles cannot be created or deleted. By default only the Super Admin holds `role.view` and `permission.assign`.
+
+Rules enforced by the API (the screen only mirrors them):
+
+- **Super Admin is immutable** (403 `role_locked`) and always has every permission.
+- **No climbing:** you cannot change your own role or a higher one, and cannot grant a permission you do not hold yourself.
+- **Ceilings:** each role has a maximum set (for example a Customer can never receive staff permissions such as `ticket.view_all` or internal notes; an Agent can never receive user or role management). Anything outside it is a 422.
+- **Floors:** permissions a role cannot work without (for example `ticket.view`) cannot be removed.
+- **Reserved** permissions that no feature uses yet are locked. **Sensitive** ones (reports, user access) show an extra warning on the confirmation.
+- **Concurrent edits:** a save carries the role's `version`; a stale save gets 409 `stale_version` and nothing is written.
+- Changes apply on the affected users' very next request (no new sign-in) and each one is written to the audit log (`role.permissions_updated`, `role.permissions_reset`) with who, which role and what was added or removed.
 
 ## Technology stack
 
@@ -279,7 +294,7 @@ src/
 
 - Ticket emails cannot be answered by email, carry no message text, and have no per-user opt-out or digest.
 - No real-time updates; a page shows new messages after a reload.
-- Role/permission editing and system settings screens are not built.
+- The system settings screen is not built. Roles cannot be created or deleted, only the four built-in ones edited.
 - Reports have no CSV export or caching, and agent figures follow each ticket's current assignee (assignment history is not replayed). There are no service-level targets (SLA) yet.
 - Sign-in tokens are kept in the browser's `sessionStorage` (or `localStorage` with "remember me").
 - Account emails are sent during the request; a mail outage is logged and does not change API answers.
