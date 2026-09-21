@@ -12,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class TicketMessageTest extends TestCase
@@ -104,7 +105,7 @@ class TicketMessageTest extends TestCase
     {
         [$ticket, $customer] = $this->scene();
         $customer->roles->first()->revokePermissionTo('ticket.reply');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->as($customer->fresh())->reply($ticket)->assertForbidden();
         $this->assertFalse($this->getJson("/api/tickets/{$ticket->id}")->json('abilities.can_reply'));
@@ -286,7 +287,7 @@ class TicketMessageTest extends TestCase
 
         // Removing the permission from a role takes effect at once.
         $agent->roles->first()->revokePermissionTo('ticket.internal_note');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $agent = $agent->fresh();
         $body = $this->as($agent)->getJson("/api/tickets/{$ticket->id}/messages")->assertOk()->getContent();

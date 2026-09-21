@@ -138,7 +138,7 @@ final class AttachmentInspector
             throw new AttachmentRejected('The image is not valid.');
         }
 
-        if ($info[0] * $info[1] > $maxPixels) {
+        if ($maxPixels < $info[0] * $info[1]) {
             throw new AttachmentRejected('The image dimensions are too large.');
         }
     }

@@ -12,6 +12,7 @@ use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class TicketWorkflowTest extends TestCase
@@ -69,7 +70,7 @@ class TicketWorkflowTest extends TestCase
         return $cases;
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('staffTransitions')]
+    #[DataProvider('staffTransitions')]
     public function test_staff_transitions_follow_the_workflow(string $from, string $to, bool $allowed): void
     {
         $this->actingAsRole(RoleName::Admin);

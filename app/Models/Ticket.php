@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
+use App\Support\Attachments\AttachmentStorage;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -89,7 +90,7 @@ class Ticket extends Model
 
         static::deleted(function (self $ticket) {
             if ($ticket->hadAttachments) {
-                \App\Support\Attachments\AttachmentStorage::disk()->deleteDirectory("tickets/{$ticket->id}");
+                AttachmentStorage::disk()->deleteDirectory("tickets/{$ticket->id}");
             }
         });
     }

@@ -17,12 +17,12 @@ use App\Models\TicketEvent;
 use App\Models\User;
 use App\Support\Attachments\AttachmentStorage;
 use App\Support\TicketWorkflow;
-use Illuminate\Support\Facades\DB;
-use Throwable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Authorisation is declared on the routes (`can:` -> TicketPolicy). The list is
@@ -233,5 +233,4 @@ class TicketController extends Controller
         TicketEvent::record($ticket, $request->user(), $type, $data);
         AuditLog::record($request->user(), 'ticket.'.$type, $ticket, ['number' => $ticket->number] + $data, $request->ip());
     }
-
 }

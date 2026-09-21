@@ -2,10 +2,11 @@
 
 namespace App\Http\Resources;
 
+use App\Models\TicketAttachment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
-/** @mixin \App\Models\TicketAttachment */
+/** @mixin TicketAttachment */
 class TicketAttachmentResource extends JsonResource
 {
     /** Deliberately omits the storage path and hash: files are only reachable through the download endpoint. */

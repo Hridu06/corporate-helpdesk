@@ -4,6 +4,7 @@ namespace Tests\Feature\Tickets;
 
 use App\Enums\RoleName;
 use App\Enums\TicketStatus;
+use App\Models\AuditLog;
 use App\Models\Ticket;
 use App\Models\TicketAttachment;
 use App\Models\TicketMessage;
@@ -14,6 +15,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class TicketAttachmentTest extends TestCase
@@ -128,8 +130,8 @@ class TicketAttachmentTest extends TestCase
 
         // The opening files are visible to the assigned agent, but the list omits them.
         $ticket = Ticket::firstOrFail();
-        $ticket->forceFill(["assigned_to" => ($agent = $this->makeUser(RoleName::Agent))->id])->save();
-        $this->as($agent)->getJson("/api/tickets/{$ticket->id}")->assertOk()->assertJsonCount(1, "ticket.attachments");
+        $ticket->forceFill(['assigned_to' => ($agent = $this->makeUser(RoleName::Agent))->id])->save();
+        $this->as($agent)->getJson("/api/tickets/{$ticket->id}")->assertOk()->assertJsonCount(1, 'ticket.attachments');
         $this->assertStringNotContainsString('attachments', $this->getJson('/api/tickets')->getContent());
     }
 
@@ -381,7 +383,7 @@ class TicketAttachmentTest extends TestCase
         $id = TicketAttachment::firstOrFail()->id;
 
         $agent->roles->first()->revokePermissionTo('ticket.internal_note');
-        app(\Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $this->as($agent->fresh())->download($ticket, $id)->assertNotFound();
     }
@@ -449,7 +451,7 @@ class TicketAttachmentTest extends TestCase
         [$ticket, $customer] = $this->scene();
         $this->as($customer)->reply($ticket, [$this->text('x', 'private-name.txt')])->assertCreated();
 
-        $log = \App\Models\AuditLog::where('action', 'ticket.public_reply')->firstOrFail();
+        $log = AuditLog::where('action', 'ticket.public_reply')->firstOrFail();
         $this->assertStringNotContainsString('private-name', json_encode($log->toArray()));
         $this->assertSame(1, $log->metadata['attachments'] ?? $log->data['attachments'] ?? null);
     }

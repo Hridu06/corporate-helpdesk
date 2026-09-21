@@ -5,10 +5,12 @@ namespace Tests\Feature\Tickets;
 use App\Enums\RoleName;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
+use App\Enums\UserStatus;
 use App\Models\Department;
 use App\Models\Ticket;
 use App\Models\User;
 use Database\Seeders\RolesAndPermissionsSeeder;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -326,14 +328,14 @@ class TicketTest extends TestCase
         $department->delete();
         $this->assertNull($ticket->fresh()->department_id);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
         $customer->delete();
     }
 
     public function test_an_inactive_user_gets_no_access(): void
     {
         $customer = $this->actingAsRole(RoleName::Customer);
-        $customer->forceFill(['status' => \App\Enums\UserStatus::Inactive])->save();
+        $customer->forceFill(['status' => UserStatus::Inactive])->save();
 
         $this->getJson('/api/tickets')->assertForbidden()->assertJsonPath('code', 'account_inactive');
     }

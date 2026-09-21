@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\TicketMessageType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,6 +53,6 @@ class TicketAttachment extends Model
 
         return $query->where(fn (Builder $q) => $q
             ->whereNull('ticket_message_id')
-            ->orWhereHas('message', fn (Builder $m) => $m->where('type', \App\Enums\TicketMessageType::PublicReply->value)));
+            ->orWhereHas('message', fn (Builder $m) => $m->where('type', TicketMessageType::PublicReply->value)));
     }
 }

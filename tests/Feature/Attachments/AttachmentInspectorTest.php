@@ -119,7 +119,7 @@ class AttachmentInspectorTest extends TestCase
 
     public function test_double_extensions_are_judged_by_the_last_one_and_the_content(): void
     {
-        $this->rejects($this->upload("<?php echo 1;", 'evil.php.png'), 'does not match');
+        $this->rejects($this->upload('<?php echo 1;', 'evil.php.png'), 'does not match');
         $this->rejects($this->upload($this->png(), 'evil.png.php'), 'not allowed');
         $this->assertSame('png', (new AttachmentInspector)->inspect($this->upload($this->png(), 'report.php.png'))['extension']);
     }
@@ -192,7 +192,7 @@ class AttachmentInspectorTest extends TestCase
         $this->assertSame('report.png', $clean("rep\0ort\n.png"));
         // Right-to-left override used to make "gpj.exe" look like "exe.jpg".
         $this->assertSame('reportexe.png', $clean("report\u{202E}exe.png"));
-        $this->assertSame('a b.png', $clean("a   b.png"));
+        $this->assertSame('a b.png', $clean('a   b.png'));
         $this->assertSame('ab.png', $clean('a<b>.png'));
         // The extension shown is the verified one, whatever the client called it.
         $this->assertSame('report.pdf', $clean('report.exe', 'pdf'));
