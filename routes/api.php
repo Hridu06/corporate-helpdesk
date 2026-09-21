@@ -5,9 +5,11 @@ use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\EmailVerificationController;
 use App\Http\Controllers\Api\LoginActivityController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\UserController;
 use App\Models\Department;
 use App\Models\LoginActivity;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +38,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     // Sign-in history (IP addresses and devices): requires the `activity.view` permission.
     Route::get('/login-activities', [LoginActivityController::class, 'index'])->can('viewAny', LoginActivity::class);
+
+    // Tickets. Visible to view_all holders, the customer who opened it and its assignee (see TicketPolicy).
+    Route::prefix('tickets')->group(function () {
+        Route::get('/', [TicketController::class, 'index'])->can('viewAny', Ticket::class);
+        Route::post('/', [TicketController::class, 'store'])->can('create', Ticket::class)->middleware('throttle:ticket-create');
+        // Must be declared before '/{ticket}' so it is not treated as an id.
+        Route::get('/options', [TicketController::class, 'options'])->can('create', Ticket::class);
+        Route::get('/{ticket}', [TicketController::class, 'show'])->can('view', 'ticket');
+    });
 
     // Departments. Managers see all; other viewers (agents) see only their own (see DepartmentPolicy).
     Route::prefix('departments')->group(function () {

@@ -62,6 +62,9 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('register', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
 
+        // Keeps one account from flooding the queue with tickets.
+        RateLimiter::for('ticket-create', fn (Request $request) => Limit::perHour(30)->by((string) $request->user()?->id));
+
         RateLimiter::for('verification', fn (Request $request) => [
             Limit::perMinute(3)->by(Str::lower((string) $request->input('email')).'|'.$request->ip()),
             Limit::perMinute(10)->by($request->ip()),
