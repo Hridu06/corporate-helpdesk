@@ -30,7 +30,8 @@ php artisan helpdesk:preflight
 `helpdesk:preflight` must end with **Ready**. It fails on: debug mode, non-HTTPS URLs, a `log`/`array`
 mail transport, an example.com sender, a wildcard CORS origin, attachments inside `public/`, PHP upload
 limits smaller than the attachment limit, and an unreachable database. It warns on: missing
-`TRUSTED_PROXIES`/HSTS, a `debug` log level, uncached config/routes, and a stale scheduler.
+`TRUSTED_PROXIES`/HSTS, a `debug` log level, uncached config/routes, a stale scheduler, `QUEUE_CONNECTION=sync`,
+stuck or failed queue jobs.
 Run it after **every** deploy (`--strict` makes warnings fail too).
 
 After every deploy:
@@ -39,6 +40,7 @@ After every deploy:
 composer install --no-dev --optimize-autoloader
 php artisan migrate --force
 php artisan config:cache && php artisan route:cache && php artisan event:cache
+php artisan queue:restart
 php artisan helpdesk:preflight
 ```
 
@@ -58,10 +60,54 @@ jobs use `onOneServer()`, which needs a shared cache (database or Redis, not `fi
 
 ### Mail
 
-Mail is sent **inside the request** (no queue worker is needed). A mail outage is logged and never turns
-into an error for the visitor, and never reveals whether an address has an account. Administrators creating
-a user see `email_sent: false` in the response when the mail could not be sent. If you later move mail to a
-queue, run `php artisan queue:work` under Supervisor/systemd.
+Two kinds of email:
+
+- **Account emails** (verification, password reset, invitation of a new user) are sent **inside the request**.
+  A mail outage is logged and never turns into an error for the visitor, and never reveals whether an address
+  has an account. Administrators creating a user see `email_sent: false` when the mail could not be sent.
+- **Ticket notification emails** (ticket received, assigned, replied, resolved, ...) are **queued**, so they need
+  the queue worker below. They contain no message text or attachments, only a short notice and a sign-in link.
+  Set `TICKET_NOTIFICATIONS_ENABLED=false` to switch them all off.
+
+### Queue worker (required for ticket emails)
+
+Ticket emails are jobs on the database queue (`QUEUE_CONNECTION=database`, tables `jobs` and `failed_jobs`, which
+the migrations create). **If no worker is running, jobs pile up and no ticket email is ever delivered**, and
+nothing shows in the web app. Keep exactly one worker running under Supervisor (or systemd).
+
+`/etc/supervisor/conf.d/helpdesk-worker.conf`:
+
+```ini
+[program:helpdesk-worker]
+process_name=%(program_name)s
+command=php /var/www/corporate-helpdesk/artisan queue:work --tries=3 --max-time=3600 --sleep=3
+directory=/var/www/corporate-helpdesk
+user=www-data
+numprocs=1
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=3600
+redirect_stderr=true
+stdout_logfile=/var/log/helpdesk-worker.log
+```
+
+```bash
+sudo supervisorctl reread && sudo supervisorctl update && sudo supervisorctl start helpdesk-worker
+```
+
+- **After every deploy** run `php artisan queue:restart` so the worker picks up the new code (Supervisor starts it
+  again by itself).
+- A job is tried up to 3 times (1, 5 and 15 minutes apart). Jobs that still fail land in `failed_jobs`:
+  `php artisan queue:failed` lists them, `php artisan queue:retry all` retries them.
+- `php artisan helpdesk:preflight` warns when a job has waited more than five minutes (worker not running), when
+  `failed_jobs` is not empty, and when `QUEUE_CONNECTION=sync` (emails would be sent inside the web request).
+- One worker is plenty for a helpdesk. Duplicates are prevented in the application (at most one email per person
+  per action); a job that is retried after the mail was already accepted could, rarely, send a second copy.
+- For local development use `QUEUE_CONNECTION=sync` (the default in `.env.example`): with `MAIL_MAILER=log` the
+  emails appear in `storage/logs/laravel.log` at once and no worker is needed. If your own `.env` says `database`,
+  run `php artisan queue:listen` (or `php artisan dev`) or nothing will be sent.
 
 ### Reverse proxy
 
@@ -134,6 +180,10 @@ and the links in emails.
 - [ ] Register a new customer: the verification email arrives, the link opens the app, login works.
 - [ ] "Forgot password" email arrives; the reset works.
 - [ ] Open a ticket with an attachment, download it, and confirm a customer cannot see an internal note's file.
+- [ ] `sudo supervisorctl status helpdesk-worker` says RUNNING. Open a test ticket as a customer: the "ticket received"
+      email arrives within a minute (and the admins' "new ticket" email, if the ticket has no department). Then add an
+      **internal note** as staff and confirm the customer received **nothing** about it.
+- [ ] `php artisan queue:failed` is empty and `helpdesk:preflight` shows no queue warnings.
 - [ ] A response header check: `curl -I https://api.../api/user` shows `X-Content-Type-Options`, `Cache-Control: no-store`,
       and (with `HSTS_ENABLED`) `Strict-Transport-Security`.
 - [ ] Log in five times with a wrong password from your own connection: the sixth attempt is rate-limited (429),
@@ -156,6 +206,7 @@ restore the pre-deploy database backup **only if a migration ran**. Migrations i
 
 - No antivirus scan on uploads (files are inspected by content, served only as downloads, never inline).
 - Image metadata (EXIF, e.g. GPS) is kept in uploaded photos.
-- No email notifications for ticket activity yet.
+- Ticket emails carry no message text (sign in to read), cannot be answered by email, and there is no per-user
+  opt-out or digest yet: everyone entitled to an email gets each one.
 - Sign-in tokens live in the browser's `sessionStorage`/`localStorage`; an XSS bug in the app would expose them.
   The CSP above and React's escaping are the mitigations.
