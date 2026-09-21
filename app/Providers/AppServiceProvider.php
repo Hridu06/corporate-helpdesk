@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -38,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
         ResetPassword::createUrlUsing(fn (User $user, string $token) => config('helpdesk.frontend_url')
             .'/reset-password?token='.$token.'&email='.urlencode($user->getEmailForPasswordReset()));
 
+        self::configureTrustedProxies(config('helpdesk.trusted_proxies'));
+
         $this->configureRateLimiting();
 
         // Super Admin implicitly holds every permission (including future ones).
@@ -45,6 +48,21 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $user) {
             return $user->isActive() && $user->isSuperAdmin() ? true : null;
         });
+    }
+
+    /**
+     * Believe X-Forwarded-For / -Proto only from the configured proxies (see
+     * config/helpdesk.php). Unset means none, so a client cannot spoof its address.
+     */
+    public static function configureTrustedProxies(?string $setting): void
+    {
+        $setting = trim((string) $setting);
+
+        if ($setting === '') {
+            return;
+        }
+
+        TrustProxies::at($setting === '*' ? '*' : array_values(array_filter(array_map('trim', explode(',', $setting)))));
     }
 
     private function configureRateLimiting(): void

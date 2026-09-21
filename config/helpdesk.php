@@ -53,4 +53,28 @@ return [
         ],
     ],
 
+    /*
+    | Reverse proxies / load balancers whose X-Forwarded-* headers are believed: empty
+    | (default) trusts none, "*" trusts every caller (only safe when the app is reachable
+    | solely through the proxy), otherwise a comma-separated list of IPs or CIDR ranges.
+    | Without this behind a proxy, every client looks like the proxy's IP and the per-IP
+    | rate limits (login, registration, password reset) would all share one bucket.
+    */
+    'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+    /*
+    | Extra origins allowed by CORS besides FRONTEND_URL (comma-separated, no trailing slash).
+    */
+    'cors_extra_origins' => env('CORS_ALLOWED_ORIGINS'),
+
+    /*
+    | Send Strict-Transport-Security on HTTPS responses. Enable once the site is served
+    | over HTTPS only: browsers then refuse plain HTTP for the whole period.
+    */
+    'hsts' => (bool) env('HSTS_ENABLED', false),
+    'hsts_max_age' => (int) env('HSTS_MAX_AGE', 31536000),
+
+    /* The scheduler writes this cache key every minute; `helpdesk:preflight` checks it is fresh. */
+    'scheduler_heartbeat_key' => 'helpdesk.scheduler.heartbeat',
+
 ];

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\Mailing;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -46,7 +47,8 @@ class EmailVerificationController extends Controller
         $user = User::where('email', Str::lower(trim($data['email'])))->first();
 
         if ($user && $user->isActive() && ! $user->hasVerifiedEmail()) {
-            $user->sendEmailVerificationNotification();
+            // Same answer whether or not the mail could be sent (see Mailing).
+            Mailing::attempt(fn () => $user->sendEmailVerificationNotification());
         }
 
         return response()->json([

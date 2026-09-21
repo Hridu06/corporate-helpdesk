@@ -11,6 +11,7 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
 use App\Models\LoginActivity;
 use App\Models\User;
+use App\Support\Mailing;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,7 +37,8 @@ class AuthController extends Controller
             return $user;
         });
 
-        event(new Registered($user));
+        // If the mail server is down the account still exists; "resend verification" recovers it.
+        Mailing::attempt(fn () => event(new Registered($user)));
 
         return response()->json([
             'message' => 'Registration successful. Please check your email to verify your account.',

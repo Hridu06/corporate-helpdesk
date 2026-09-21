@@ -10,6 +10,7 @@ use App\Http\Requests\Users\UpdateUserRoleRequest;
 use App\Http\Resources\AdminUserResource;
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Support\Mailing;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,10 +79,14 @@ class UserController extends Controller
         });
 
         AuditLog::record($request->user(), 'user.created', $user, ['role' => $data['role']], $request->ip());
-        Password::sendResetLink(['email' => $user->email]);
+        $sent = Mailing::attempt(fn () => Password::sendResetLink(['email' => $user->email]));
 
         return response()->json([
-            'message' => 'User created. A link to set their password has been emailed.',
+            // The admin is told when the mail failed; the account exists either way.
+            'message' => $sent
+                ? 'User created. A link to set their password has been emailed.'
+                : 'User created, but the email could not be sent. Ask them to use "Forgot password" once mail is working.',
+            'email_sent' => $sent,
             'user' => new AdminUserResource($user->load('roles')),
         ], 201);
     }
@@ -101,7 +106,7 @@ class UserController extends Controller
 
         if ($emailChanged) {
             $user->tokens()->delete();
-            $user->sendEmailVerificationNotification();
+            Mailing::attempt(fn () => $user->sendEmailVerificationNotification());
         }
 
         if ($changed) {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Models\User;
+use App\Support\Mailing;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,8 @@ class PasswordResetController extends Controller
 
         if ($user?->isActive()) {
             // Throttled/failed broker statuses are deliberately not exposed.
-            Password::sendResetLink(['email' => $email]);
+            // A mail failure is logged, never shown: it would reveal that the account exists.
+            Mailing::attempt(fn () => Password::sendResetLink(['email' => $email]));
         }
 
         return response()->json([
