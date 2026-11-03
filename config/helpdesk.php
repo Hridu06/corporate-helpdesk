@@ -8,6 +8,9 @@ return [
     */
     'frontend_url' => rtrim(env('FRONTEND_URL', 'http://localhost:5173'), '/'),
 
+    // Disable locally until outgoing mail is configured; re-enable without changing account data.
+    'email_verification_required' => (bool) env('EMAIL_VERIFICATION_REQUIRED', true),
+
     /*
     | Bearer token lifetimes in minutes. "Remember me" issues a longer-lived
     | token; Sanctum's global `expiration` remains the hard upper bound.

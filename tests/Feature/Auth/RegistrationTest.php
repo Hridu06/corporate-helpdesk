@@ -38,6 +38,7 @@ class RegistrationTest extends TestCase
         $response = $this->postJson('/api/register', $this->payload());
 
         $response->assertCreated()
+            ->assertJsonPath('email_verification_required', true)
             ->assertJsonPath('user.email', 'jane@example.com')
             ->assertJsonPath('user.roles', ['customer'])
             ->assertJsonPath('user.status', 'active')
@@ -48,6 +49,26 @@ class RegistrationTest extends TestCase
         $this->assertNull($user->email_verified_at);
         $this->assertTrue(password_verify(self::PASSWORD, $user->password));
         Notification::assertSentTo($user, VerifyEmail::class);
+    }
+
+    public function test_registration_without_verification_sends_no_mail_and_allows_immediate_login(): void
+    {
+        config(['helpdesk.email_verification_required' => false]);
+        Notification::fake();
+
+        $this->postJson('/api/register', $this->payload())
+            ->assertCreated()
+            ->assertJsonPath('email_verification_required', false)
+            ->assertJsonPath('message', 'Registration successful. You can now sign in.')
+            ->assertJsonPath('user.roles', ['customer'])
+            ->assertJsonPath('user.email_verified_at', null)
+            ->assertJsonMissingPath('token');
+        Notification::assertNothingSent();
+
+        $this->postJson('/api/login', [
+            'email' => 'jane@example.com',
+            'password' => self::PASSWORD,
+        ])->assertOk()->assertJsonStructure(['token']);
     }
 
     public function test_duplicate_email_is_rejected(): void

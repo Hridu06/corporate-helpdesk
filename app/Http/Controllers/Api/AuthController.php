@@ -22,8 +22,8 @@ class AuthController extends Controller
 {
     /**
      * Public registration. Always creates an active Customer; no role or
-     * status input is accepted. The verification email is sent via the
-     * Registered event, and no token is issued until the email is verified.
+     * status input is accepted. Verification mail is sent only when required;
+     * registration never issues a token, so the user signs in separately.
      */
     public function register(RegisterRequest $request): JsonResponse
     {
@@ -37,11 +37,18 @@ class AuthController extends Controller
             return $user;
         });
 
-        // If the mail server is down the account still exists; "resend verification" recovers it.
-        Mailing::attempt(fn () => event(new Registered($user)));
+        $requiresVerification = config('helpdesk.email_verification_required');
+
+        if ($requiresVerification) {
+            // If mail fails the account still exists; "resend verification" recovers it.
+            Mailing::attempt(fn () => event(new Registered($user)));
+        }
 
         return response()->json([
-            'message' => 'Registration successful. Please check your email to verify your account.',
+            'message' => $requiresVerification
+                ? 'Registration successful. Please check your email to verify your account.'
+                : 'Registration successful. You can now sign in.',
+            'email_verification_required' => $requiresVerification,
             'user' => new UserResource($user),
         ], 201);
     }
@@ -82,7 +89,7 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if (! $user->hasVerifiedEmail()) {
+        if (config('helpdesk.email_verification_required') && ! $user->hasVerifiedEmail()) {
             LoginActivity::record($user, LoginStatus::Blocked, $request);
 
             return response()->json([

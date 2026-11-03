@@ -106,6 +106,35 @@ class LoginLogoutTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
+    public function test_unverified_customer_can_login_and_use_api_when_verification_is_disabled(): void
+    {
+        config(['helpdesk.email_verification_required' => false]);
+        $user = $this->customer(['email_verified_at' => null]);
+
+        $response = $this->login($user)->assertOk()
+            ->assertJsonPath('user.email_verified_at', null)
+            ->assertJsonPath('user.roles', ['customer']);
+        $this->assertDatabaseCount('personal_access_tokens', 1);
+        $this->assertNull($user->fresh()->email_verified_at);
+        $this->withFreshGuard();
+
+        $this->withToken($response->json('token'))->getJson('/api/user')->assertOk();
+        $this->withToken($response->json('token'))->getJson('/api/tickets')->assertOk();
+        $this->withToken($response->json('token'))->getJson('/api/users')->assertForbidden();
+    }
+
+    public function test_disabling_verification_still_rejects_wrong_passwords_and_inactive_accounts(): void
+    {
+        config(['helpdesk.email_verification_required' => false]);
+        $user = $this->customer(['email_verified_at' => null]);
+
+        $this->login($user, ['password' => 'Wrong!Passw0rd'])
+            ->assertUnauthorized()->assertJsonPath('code', 'invalid_credentials');
+        $user->forceFill(['status' => 'inactive'])->save();
+        $this->login($user)->assertForbidden()->assertJsonPath('code', 'account_inactive');
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
     public function test_account_state_is_not_revealed_without_the_correct_password(): void
     {
         $user = $this->customer(['email_verified_at' => null]);

@@ -110,7 +110,9 @@ php artisan helpdesk:create-super-admin   # asks for name, email, password (12+ 
 php artisan serve                         # http://localhost:8000
 ```
 
-In development `MAIL_MAILER=log`, so **no email is really sent**: verification and password-reset links appear in `storage/logs/laravel.log`. Newly registered users must open the verification link before they can sign in. (An account created with `helpdesk:create-super-admin` or by an administrator is already verified.)
+In development `MAIL_MAILER=log`, so **no email is really sent**: account emails appear in `storage/logs/laravel.log`. Set `EMAIL_VERIFICATION_REQUIRED=false` in `.env` (as in `.env.example`) to let existing and newly registered accounts sign in with email and password, without a verification email. Registration does not send verification mail in this mode, and email addresses remain unverified in the database. Password reset and staff invitations still use email.
+
+To require verification later, configure outgoing mail, set `EMAIL_VERIFICATION_REQUIRED=true`, and run `php artisan config:clear`. With verification enabled, unverified users must open a verification link before signing in. Omitting the setting defaults to requiring verification. Accounts created by an administrator are already verified.
 
 For the scheduled jobs while developing, run `php artisan schedule:work` in a second terminal (see [Scheduler](#scheduler-and-cleanup-jobs)).
 
